@@ -167,8 +167,8 @@ void reSync(){
   setBW = loraConfig[syncCount][1];
   waitForSendVal = loraConfig[syncCount][2]*1000;
   waitForSyncVal = loraConfig[syncCount][3]*1000;
-  waitForSync = 300001;
-  waitForSend = 60001;
+  waitForSync = 300000;
+  waitForSend = 6000;
   syncMode = 0;
 }
 
