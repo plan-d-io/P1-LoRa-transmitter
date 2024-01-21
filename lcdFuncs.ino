@@ -34,7 +34,7 @@ void setLCD(int lcdState, unsigned long displayULong, int displayInt){
     else if(lcdState == 12){
       u8g2->drawStr(0, 40, "No receiver found");
       String tempBuf = "Retrying in ";
-      tempBuf += String((300000-waitForSync)/1000);
+      tempBuf += String((180000-waitForSync)/1000);
       tempBuf += " s";
       u8g2->drawStr(0, 56, tempBuf.c_str());
       u8g2->sendBuffer();

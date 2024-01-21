@@ -135,6 +135,7 @@ void sendTelegram(byte telegramType){
   Serial.print("Transmission took ");
   Serial.print(millis() - tempMillis);
   Serial.println(" ms");
+  runPacketLoss++;
 }
 
 void processTelegramAck(byte inMsgType, byte inMsgCounter, byte msg[]){
@@ -151,6 +152,7 @@ void processTelegramAck(byte inMsgType, byte inMsgCounter, byte msg[]){
       Serial.println("CRC check matches");
       //telegramAckCounter++;
       telegramAckCounter = inMsgCounter;
+      runPacketLoss = 0;
       setLCD(14, 0, 0);
     }
   }
@@ -159,6 +161,13 @@ void processTelegramAck(byte inMsgType, byte inMsgCounter, byte msg[]){
 
 void reSync(){
   Serial.println("Restarting sync procedure");
+  Serial.println("Sending restart sync ACK");
+  LoRa.beginPacket();
+  LoRa.write(networkNum);
+  LoRa.write(24);
+  LoRa.write(telegramCounter);
+  LoRa.write(0);
+  LoRa.endPacket();
   telegramCounter = 0;
   telegramAckCounter = 0;
   syncCount = 0;
@@ -169,12 +178,14 @@ void reSync(){
   waitForSyncVal = loraConfig[syncCount][3]*1000;
   waitForSync = 300000;
   waitForSend = 6000;
+  LoRa.setSpreadingFactor(setSF);
+  LoRa.setSignalBandwidth(setBW*1000);
   syncMode = 0;
 }
 
 void syncLoop(){
   if(syncMode == 0){ //initial state: periodically send sync start beacon to see if receiver replies
-    if(waitForSync > 300000){
+    if(waitForSync > 180000){
       if(waitForSend > 3000) setLCD(10, 0, 0); //update LCD ever 3s
       if(waitForSend > 6000){ //send sync request every 6s
         Serial.println("Sending sync discovery");
@@ -182,8 +193,8 @@ void syncLoop(){
         sendSync(true);
         waitForSend = 0;
         syncTry++;
-        if(syncTry > 6){ //wait five minutes before trying again
-          Serial.println("No response, waiting five minutes before trying again");
+        if(syncTry > 6){ //wait three minutes before trying again
+          Serial.println("No response, waiting three minutes before trying again");
           waitForSync = 0;
           syncTry = 0;
         }
@@ -293,6 +304,12 @@ void syncLoop(){
     Serial.println(", stopping sync");
     LoRa.setSpreadingFactor(setSF);
     LoRa.setSignalBandwidth(setBW*1000);
+    if(setSF == 7) accPacketLoss = 26;
+    else if (setSF == 8) accPacketLoss = 21;
+    else if (setSF == 9) accPacketLoss = 15;
+    else if (setSF == 10) accPacketLoss = 9;
+    else if (setSF == 8) accPacketLoss = 6;
+    else if (setSF == 12) accPacketLoss = 3;
     telegramCounter = 0;
     telegramAckCounter = 0;
     syncMode = -1;

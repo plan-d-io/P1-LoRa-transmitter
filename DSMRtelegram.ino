@@ -72,13 +72,13 @@ void splitTelegram(String rawTelegram){
     /*Natural gas consumption*/ //temporary implementation
     if(key == "0-1:24.2.3"){
       //splitWithTimeAndUnit(value, splitValue, splitUnit, splitTime, splitTimestamp);
-      //meterData[10] = splitValue;
+      meterData[10] = splitValue;
       gasFound = true ;
     }
     /*Water consumption*/ //temporary implementation
     if(key == "0-2:24.2.1"){  
       //splitWithTimeAndUnit(value, splitValue, splitUnit, splitTime, splitTimestamp);
-      //meterData[11] = splitValue;
+      meterData[11] = splitValue;
       waterFound = true ;
     }
     /*Aactual power consumption 1*/
@@ -126,7 +126,6 @@ void splitTelegram(String rawTelegram){
     if(key == "1-0:51.7.0"){  
       splitWithUnit(value, splitValue, splitUnit);
       meterData[20] = splitValue;
-
     }
     /*Current 3*/
     if(key == "1-0:71.7.0"){  

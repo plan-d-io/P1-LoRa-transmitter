@@ -35,36 +35,38 @@ static const unsigned long loraUpdate[][7] ={
 
 /*Template of meter telegram*/
 float meterData[] = {
-  123456.789, //totConT1
-  123456.789, //totConT2
-  456789.123, //totInT1
-  321987.654, //totInT2
-  54.321,     //TotpowCon
-  0,          //TotpowIn
-  87654.321,  //avgDem
-  12345.678,  //maxDemM
-  543.21,     //volt1
-  543.21,     //current1
-  87654.321,  //totGasCon
-  12345.678,  //totWatCon
-  54.321,     //powCon1
-  0,          //powCon2
-  0,          //powCon3
-  54.321,     //powIn1
-  0,          //powIn2
-  54.321,     //powIn3
-  123.45,     //volt2
-  234.36,     //volt3
-  0,          //current2
-  543.21,      //current3
+  999999.999, //totConT1
+  999999.999, //totConT2
+  999999.999, //totInT1
+  999999.999, //totInT2
+  99.999,     //TotpowCon
+  99.999,     //TotpowIn
+  999999.999, //avgDem
+  999999.999, //maxDemM
+  999.99,     //volt1
+  999.99,     //current1
+  999999.999, //totGasCon
+  999999.999, //totWatCon
+  99.999,     //powCon1
+  999999.999, //powCon2
+  999999.999, //powCon3
+  99.999,     //powIn1
+  999999.999, //powIn2
+  999999.999, //powIn3
+  999.99,     //volt2
+  999.99,     //volt3
+  999.99,     //current2
+  999.99,     //current3
   0,          //pad
   0           //pad
 };
   
-elapsedMillis runLoop, waitForSync, waitForSend;
+elapsedMillis runLoop, waitForSync, waitForSend, sinceLastMsg;
 unsigned long waitForSyncVal, waitForSendVal;
 int syncMode, syncTry;
 int syncCount = 0;
+int accPacketLoss = 25;
+unsigned int runPacketLoss;
 byte meterType, delayType, setSF, setBW;
 byte packetCounter, telegramCounter, telegramAckCounter;
 boolean gasFound, waterFound, threePhase;
@@ -128,6 +130,7 @@ void loop() {
       String s=HWSERIAL.readStringUntil('!');
       s = s + HWSERIAL.readStringUntil('\n');
       s = s + '\n';
+      Serial.println("Received meter telegram");
       splitTelegram(s);
       if(runLoop > loraUpdate[delayType][syncCount]){
         sendTelegram(meterType);
@@ -138,11 +141,12 @@ void loop() {
           telegramCounter = 0;
           telegramAckCounter = 0;
         }*/
-        if(packetLoss > 128){ //if packetloss is too big, resync (receiver should have reverted to initial settings too)
+        if(packetLoss > 64 || runPacketLoss > accPacketLoss){ //if packetloss is too big, resync (receiver should have reverted to initial settings too)
           reSync();
         }
       }
     }
+    if(sinceLastMsg > 300000) reSync();
   }
   else syncLoop();
   onReceive(LoRa.parsePacket());
@@ -177,8 +181,14 @@ void onReceive(int packetSize) {
   }
   if(inMessageType == 8 || inMessageType == 128){
     processTelegramAck(inMessageType, inMessageCounter, incoming);
+    sinceLastMsg = 0;
   }
   else if(inMessageType == 178 || inMessageType == 93){
     processSyncAck(inMessageType, inMessageCounter, incoming);
+    sinceLastMsg = 0;
+  }
+  else if(inMessageType == 231){ //resync request
+    reSync();
+    sinceLastMsg = 0;
   }
 }
