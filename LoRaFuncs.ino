@@ -37,7 +37,7 @@ void processSyncAck(byte inMsgType, byte inMsgCounter, byte msg[]){
     }
   }
   else{
-    Serial.println("Invzalid RF link parameters returned");
+    Serial.println("Invalid RF link parameters returned");
     return;
   }
 }
@@ -260,12 +260,27 @@ void syncLoop(){
     Serial.println(telegramAckCounter);
     waitForSend = 0;
     waitForSync = 0;
-    if(telegramCounter > telegramAckCounter*2){
+    if(telegramCounter > telegramAckCounter*2){ //if packetloss is over 50%
       Serial.println("Stopping sync");
-      if(syncCount > 0) syncCount--; //revert to previous settings or stay on the first setting
-      sendSync(false);
-      waitForSend = 0;
-      syncMode = 8;
+      if(telegramAckCounter == 0 && revertTried){ //if we did not receive sync ACKs and we already tried reverting to lower settings once, restart the sync procedure
+        Serial.println("Previous settings tried, restarting sync procedure");
+        syncCount = 0; 
+        waitForSync = waitForSyncVal;
+        waitForSyncVal = loraConfig[syncCount][3]*1000;
+        waitForSend = waitForSendVal;
+        syncMode = 1;
+        revertTried = false;
+      }
+      else if(syncCount > 0){
+        Serial.println("Switching back to previous RF settings");
+        syncCount--; //revert to previous settings or stay on the first setting
+        revertTried = true;
+      }
+      else{
+        sendSync(false);
+        waitForSend = 0;
+        syncMode = 8;
+      }
     }
     else{
       syncCount++; //try better settings
@@ -282,7 +297,6 @@ void syncLoop(){
         waitForSend = 0;
         syncMode = 8;
       }
-
     }
     telegramCounter = 0;
     telegramAckCounter = 0;

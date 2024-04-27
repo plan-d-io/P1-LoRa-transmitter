@@ -69,13 +69,13 @@ void splitTelegram(String rawTelegram){
       splitWithUnit(value, splitValue, splitUnit);
       meterData[9] = splitValue;
     }
-    /*Natural gas consumption*/ //temporary implementation
+    /*Natural gas consumption*/
     if(key == "0-1:24.2.3"){
       //splitWithTimeAndUnit(value, splitValue, splitUnit, splitTime, splitTimestamp);
       meterData[10] = splitValue;
       gasFound = true ;
     }
-    /*Water consumption*/ //temporary implementation
+    /*Water consumption*/
     if(key == "0-2:24.2.1"){  
       //splitWithTimeAndUnit(value, splitValue, splitUnit, splitTime, splitTimestamp);
       meterData[11] = splitValue;
@@ -184,4 +184,26 @@ void splitWithTimeAndUnit(String &value, float &splitValue, String &splitUnit, s
   splitMeterTime(value, splitTime, splitTimestamp);
   value = buf.substring(valueStart);
   splitWithUnit(value, splitValue, splitUnit);
+}
+
+unsigned long parseTimestampToEpoch(String timestamp) {
+  int yr = timestamp.substring(0, 2).toInt() + 2000; // Adjust for YY to YYYY
+  int month = timestamp.substring(2, 4).toInt();
+  int day = timestamp.substring(4, 6).toInt();
+  int hr = timestamp.substring(6, 8).toInt();
+  int minute = timestamp.substring(8, 10).toInt();
+  int sec = timestamp.substring(10, 12).toInt();
+  char season = timestamp.charAt(12);
+
+  struct tm tm;
+  tm.tm_year = yr - 1900;   // Set date
+  tm.tm_mon = month - 1;
+  tm.tm_mday = day;
+  tm.tm_hour = hr;          // Set time
+  tm.tm_min = minute;
+  tm.tm_sec = sec;
+  tm.tm_isdst = -1;         // Let mktime() determine whether DST is in effect
+
+  time_t t = mktime(&tm);   // Convert to time_t (Unix time)
+  return (unsigned long)t;
 }
