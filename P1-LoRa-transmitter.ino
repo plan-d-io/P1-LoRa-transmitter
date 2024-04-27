@@ -33,6 +33,8 @@ static const unsigned long loraUpdate[][7] ={
   {372346, 173169, 93369, 50238, 26977, 14538, 7000}
   };
 
+bool telegramDebug = true;
+
 /*Template of meter telegram*/
 float meterData[] = {
   999999.999, //totConT1
@@ -52,7 +54,7 @@ float meterData[] = {
   999999.999, //powCon3
   99.999,     //powIn1
   999999.999, //powIn2
-  999999.999, //powIn3
+  999999.999,  //powIn3
   999.99,     //volt2
   999.99,     //volt3
   999.99,     //current2
@@ -67,6 +69,7 @@ int syncMode, syncTry;
 int syncCount = 0;
 int accPacketLoss = 25;
 unsigned int runPacketLoss;
+bool revertTried;
 byte meterType, delayType, setSF, setBW;
 byte packetCounter, telegramCounter, telegramAckCounter;
 boolean gasFound, waterFound, threePhase;
@@ -77,6 +80,9 @@ uint32_t romCRC;
 unsigned char key[32];
 unsigned char iv[16], iv2[16];
 
+bool timeSet;
+elapsedMillis sinceClockCheck;
+
 void setup() {
   initBoard();
   // When the power is turned on, a delay is required.
@@ -85,6 +91,7 @@ void setup() {
   Serial.begin(115200);
   HWSERIAL.begin(115200, SERIAL_8N1, 12, 13);
   Serial.println("LoRa P1 transmitter");
+  setTimezone("CET-1CEST,M3.5.0,M10.5.0/3"); // Timezone for Brussels
   /*Start LoRa radio*/
   LoRa.setPins(RADIO_CS_PIN, RADIO_RST_PIN, RADIO_DIO0_PIN);
   if (!LoRa.begin(LoRa_frequency)) {
@@ -150,6 +157,10 @@ void loop() {
   }
   else syncLoop();
   onReceive(LoRa.parsePacket());
+  if(sinceClockCheck >= 600000){
+    timeSet = false;
+    sinceClockCheck = 0;
+  }
 }
 
 void onReceive(int packetSize) {
@@ -191,4 +202,10 @@ void onReceive(int packetSize) {
     reSync();
     sinceLastMsg = 0;
   }
+}
+
+void setTimezone(String timezone){
+  Serial.printf("  Setting Timezone to %s\n", timezone.c_str());
+  setenv("TZ", timezone.c_str(), 1);  // Adjust the TZ.
+  tzset();
 }
