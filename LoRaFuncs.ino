@@ -3,14 +3,17 @@ void processSyncAck(byte inMsgType, byte inMsgCounter, byte msg[]){
     if(inMsgType == 178 ){ //ACK start sync message
       if(syncMode > -1){
         if(sizeof(msg) > 2){
-          if(msg[0] == setSF && msg[1] == setBW && msg[2] == byte(waitForSyncVal/1000)){
-            Serial.print("Received sync signal ACK, setting SF to ");
-            Serial.print(setSF);
+          if(sizeof(msg) == 4 && msg[3] == 189){
+            Serial.print("Received forced sync signal ACK, forcing SF to ");
+            Serial.print(msg[0]);
             Serial.print(", BW to ");
-            Serial.print(setBW);
+            Serial.print(msg[1]);
             Serial.print(", and timer to ");
-            Serial.print(waitForSyncVal/1000);
+            Serial.print(msg[2]);
             Serial.println(" seconds");
+            setSF = msg[0];
+            setBW = msg[1];
+            forcedSettings = true;
             LoRa.setSpreadingFactor(setSF);
             LoRa.setSignalBandwidth(setBW*1000);
             waitForSend = waitForSendVal;
@@ -18,8 +21,25 @@ void processSyncAck(byte inMsgType, byte inMsgCounter, byte msg[]){
             syncMode = 2;
           }
           else{
-            Serial.println("Returned RF link parameters do not match");
-            return;
+            if(msg[0] == setSF && msg[1] == setBW && msg[2] == byte(waitForSyncVal/1000)){
+              Serial.print("Received sync signal ACK, setting SF to ");
+              Serial.print(setSF);
+              Serial.print(", BW to ");
+              Serial.print(setBW);
+              Serial.print(", and timer to ");
+              Serial.print(waitForSyncVal/1000);
+              Serial.println(" seconds");
+              forcedSettings = false;
+              LoRa.setSpreadingFactor(setSF);
+              LoRa.setSignalBandwidth(setBW*1000);
+              waitForSend = waitForSendVal;
+              waitForSync = 0;
+              syncMode = 2;
+            }
+            else{
+              Serial.println("Returned RF link parameters do not match");
+              return;
+            }
           }
         }
       }
@@ -43,10 +63,19 @@ void processSyncAck(byte inMsgType, byte inMsgCounter, byte msg[]){
 }
 
 void sendSync(bool startSync){
-  setSF = loraConfig[syncCount][0];
-  setBW = loraConfig[syncCount][1];
-  waitForSendVal = loraConfig[syncCount][2]*1000;
-  waitForSyncVal = loraConfig[syncCount][3]*1000;
+  if(!forcedSettings){
+    setSF = loraConfig[syncCount][0];
+    setBW = loraConfig[syncCount][1];
+    if(forcedSettings){
+      for (int i = 0; i < sizeof(loraConfig) / sizeof(loraConfig[0]); i++) {
+        if (loraConfig[i][0] == setSF) {
+          waitForSendVal = loraConfig[i][2]*1000;
+        }
+      }
+    }
+    else waitForSendVal = loraConfig[syncCount][2]*1000;
+    waitForSyncVal = loraConfig[syncCount][3]*1000;
+  }
   Serial.print("Sending");
   if(!startSync) Serial.print(" stop");
   Serial.print(" sync beacon with SF");
@@ -59,18 +88,24 @@ void sendSync(bool startSync){
   }
   Serial.println("");
   unsigned long tempMillis = millis();
+  digitalWrite(BOARD_LED, HIGH);
   LoRa.beginPacket();
   LoRa.write(networkNum);
+  digitalWrite(BOARD_LED, LOW);
   if(startSync) LoRa.write(170);
   else LoRa.write(85);
+  digitalWrite(BOARD_LED, HIGH);
   LoRa.write(packetCounter);
   if(startSync) LoRa.write(4);
   else LoRa.write(3);
+  digitalWrite(BOARD_LED, LOW);
   LoRa.write(syncCount);
+  digitalWrite(BOARD_LED, HIGH);
   LoRa.write(setSF);
   LoRa.write(setBW);
   if(startSync) LoRa.write(byte(waitForSyncVal/1000)); //Send timing beacon (window in which receiver must listen to sync requests)
   LoRa.endPacket();
+  digitalWrite(BOARD_LED, LOW);
   packetCounter = 0;
   Serial.print("Transmission took ");
   Serial.print(millis() - tempMillis);
@@ -122,6 +157,7 @@ void sendTelegram(byte telegramType){
   if(syncMode < 0) Serial.println("Sending meter telegram over LoRa");
   unsigned long tempMillis = millis();
   /*Transmit everything*/
+  digitalWrite(BOARD_LED, HIGH);
   LoRa.beginPacket();        // start packet.  ???
   LoRa.write(networkNum);
   LoRa.write(telegramType);
@@ -129,8 +165,10 @@ void sendTelegram(byte telegramType){
   LoRa.write(byte(payloadByteSize));
   for(int i = 0; i < payloadByteSize; i++){
     LoRa.write(encryptedPayload[i]);
+    digitalWrite(BOARD_LED, (i % 2 == 0) ? LOW : HIGH);
   }
   LoRa.endPacket();
+  digitalWrite(BOARD_LED, LOW);
   telegramCounter++;
   Serial.print("Transmission took ");
   Serial.print(millis() - tempMillis);
@@ -162,12 +200,16 @@ void processTelegramAck(byte inMsgType, byte inMsgCounter, byte msg[]){
 void reSync(){
   Serial.println("Restarting sync procedure");
   Serial.println("Sending restart sync ACK");
+  digitalWrite(BOARD_LED, HIGH);
   LoRa.beginPacket();
   LoRa.write(networkNum);
+  digitalWrite(BOARD_LED, LOW);
   LoRa.write(24);
+  digitalWrite(BOARD_LED, HIGH);
   LoRa.write(telegramCounter);
   LoRa.write(0);
   LoRa.endPacket();
+  digitalWrite(BOARD_LED, LOW);
   telegramCounter = 0;
   telegramAckCounter = 0;
   syncCount = 0;
@@ -186,6 +228,7 @@ void reSync(){
 void syncLoop(){
   if(syncMode == 0){ //initial state: periodically send sync start beacon to see if receiver replies
     if(waitForSync > 180000){
+      screenSaver = 0;
       if(waitForSend > 3000) setLCD(10, 0, 0); //update LCD ever 3s
       if(waitForSend > 6000){ //send sync request every 6s
         Serial.println("Sending sync discovery");
@@ -204,6 +247,7 @@ void syncLoop(){
   }
   else if(syncMode == 1){ //send sync beacon with new rf channel parameters and wait for confirmation of receiver
     if(waitForSync > waitForSyncVal){
+      screenSaver = 0;
       if(waitForSend > waitForSendVal){ //send sync beacon every now and then, wait for the rest of this loop for confirmation
         Serial.println("Sending sync request");
         sendSync(true);
@@ -215,6 +259,7 @@ void syncLoop(){
             Serial.println("No response, waiting five minutes before trying again");
             waitForSync = 0;
             syncTry = 0;
+            reSync();
           }
         }
         else{
@@ -233,6 +278,7 @@ void syncLoop(){
   else if(syncMode == 2){
     //Send calibration telegrams
     if(waitForSync < waitForSyncVal){ //during the sync interval, send calibration messages
+      screenSaver = 0;
       if(waitForSend > waitForSendVal){
         Serial.println("Sending calibration telegram");
         sendTelegram(0);
@@ -247,6 +293,7 @@ void syncLoop(){
     }
   }
   else if(syncMode == 3){ //additional wait to account for transmission delay
+    screenSaver = 0;
     setLCD(14, 0, 0);
     if(waitForSend > 4500){
       waitForSend = 0;
@@ -254,6 +301,7 @@ void syncLoop(){
     }
   }
   else if(syncMode == 4){
+    screenSaver = 0;
     Serial.print("We have sent ");
     Serial.print(telegramCounter);
     Serial.print(" telegrams, received ");
@@ -283,6 +331,7 @@ void syncLoop(){
       }
     }
     else{
+      if(forcedSettings) syncCount = 7;
       syncCount++; //try better settings
       if(syncCount < 7){
         waitForSync = waitForSyncVal;
@@ -302,6 +351,7 @@ void syncLoop(){
     telegramAckCounter = 0;
   }
   else if(syncMode == 8){
+    screenSaver = 0;
     setLCD(15, 0, 0);
     if(waitForSend > waitForSendVal){
       Serial.println("Did not receive stop sync ack, repeating");
@@ -310,6 +360,7 @@ void syncLoop(){
     }
   }
   else if(syncMode == 9){
+    screenSaver = 0;
     setLCD(16, 0, 0);
     Serial.print("Setting SF to ");
     Serial.print(setSF);

@@ -10,7 +10,7 @@
 #define HWSERIAL Serial1 //Use hardware UART for communication with digital meter
 
 /*Keep or change these three settings, but make sure the are identical on both transmitter and receiver!*/
-uint8_t networkNum = 127;                 //Must be unique for every transmitter-receiver pair
+uint8_t networkNum = 125;                 //Must be unique for every transmitter-receiver pair
 char plaintextKey[] = "abcdefghijklmnop"; //The key used to encrypt/decrypt the meter telegram
 char networkID[] = "myLoraNetwork";       //Used to generate the initialisation vector for the AES encryption algorithm
 
@@ -63,13 +63,14 @@ float meterData[] = {
   0           //pad
 };
   
-elapsedMillis runLoop, waitForSync, waitForSend, sinceLastMsg;
+elapsedMillis runLoop, waitForSync, waitForSend, sinceLastMsg, screenSaver;
+unsigned long screenTimeOut = 30000;
 unsigned long waitForSyncVal, waitForSendVal;
 int syncMode, syncTry;
 int syncCount = 0;
 int accPacketLoss = 25;
 unsigned int runPacketLoss;
-bool revertTried;
+bool revertTried, forcedSettings;
 byte meterType, delayType, setSF, setBW;
 byte packetCounter, telegramCounter, telegramAckCounter;
 boolean gasFound, waterFound, threePhase;
@@ -87,6 +88,7 @@ void setup() {
   initBoard();
   // When the power is turned on, a delay is required.
   delay(1500);
+  pinMode(4, INPUT_PULLDOWN);
   setLCD(0, 0, 0);
   Serial.begin(115200);
   HWSERIAL.begin(115200, SERIAL_8N1, 12, 13);
@@ -128,6 +130,7 @@ void setup() {
   setBW = loraConfig[syncCount][1];
   syncMode = 0;
   waitForSync = 380000;
+  digitalWrite(BOARD_LED, LOW);
 }
 
 void loop() {
@@ -161,12 +164,20 @@ void loop() {
     timeSet = false;
     sinceClockCheck = 0;
   }
+  if(digitalRead(4) == HIGH) {
+    Serial.println("HIGH");
+    screenSaver = 0;
+  }
+  if(screenSaver > screenTimeOut){
+    setLCD(-1, 0, 0);
+  }
 }
 
 void onReceive(int packetSize) {
-    if (packetSize == 0)
+  if (packetSize == 0)
         return;  // if there's no packet, return.  ?????,???
   // read packet header bytes:
+  digitalWrite(BOARD_LED, HIGH);
   byte inNetworkNum = LoRa.read();
   byte inMessageType = LoRa.read();
   byte inMessageCounter = LoRa.read();
@@ -175,13 +186,14 @@ void onReceive(int packetSize) {
   Serial.print(inNetworkNum);
   Serial.print(", message type ");
   Serial.print(inMessageType);
-  Serial.print(" witch message count ");
+  Serial.print(" with message count ");
   Serial.print(inMessageCounter);
   Serial.print(", length of ");
   Serial.print(inPayloadSize);
   Serial.println(" bytes");
   if(inNetworkNum != networkNum) {
     Serial.println("Wrong network ID");
+    digitalWrite(BOARD_LED, LOW);
     return;
   }
   byte incoming[inPayloadSize];
@@ -190,6 +202,7 @@ void onReceive(int packetSize) {
     incoming[i]= LoRa.read();
     i++;
   }
+  digitalWrite(BOARD_LED, LOW);
   if(inMessageType == 8 || inMessageType == 128){
     processTelegramAck(inMessageType, inMessageCounter, incoming);
     sinceLastMsg = 0;

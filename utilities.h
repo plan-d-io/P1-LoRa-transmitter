@@ -110,7 +110,9 @@
 #define ADC_PIN                     35
 
 #define HAS_DISPLAY
+
 #elif defined(LILYGO_T3_V1_6)
+
 #define I2C_SDA                     21
 #define I2C_SCL                     22
 #define OLED_RST                    UNUSE_PIN
@@ -157,7 +159,7 @@
 #define SDCARD_CS                   13
 
 #define BOARD_LED                   0
-#define LED_ON                      LOW
+#define LED_ON                      HIGH
 
 #define HAS_DISPLAY
 #define HAS_SDCARD
